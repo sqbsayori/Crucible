@@ -260,16 +260,41 @@ class AIWorker(QThread):
     finished_signal = pyqtSignal(bool, str) # 发送处理成功与否及最终提示信息
 
     def __init__(self, file_paths: List[str], whisper_lang: str = 'auto', 
-                 use_reflection: bool = True, custom_api_key: str = None):
+                 use_reflection: bool = True, custom_api_key: str = None,
+                 provider_type: str = 'dashscope', model_name: str = None):
         super().__init__()
         self.file_paths = file_paths
         self.whisper_lang = whisper_lang
         self.use_reflection = use_reflection
         self.custom_api_key = custom_api_key
+        self.provider_type = provider_type
+        self.model_name = model_name
 
     def run(self):
         temp_dir = Config.TEMP_DIR
         try:
+            # 根据选择的Provider配置不同的API
+            if self.provider_type == 'openai':
+                # OpenAI Provider
+                Config.LLM_API_BASE = Config.OPENAI_API_BASE
+                Config.LLM_MODEL_NAME = self.model_name if self.model_name else Config.OPENAI_MODEL_NAME
+                logger.info(f"使用 OpenAI Provider，模型: {Config.LLM_MODEL_NAME}")
+            elif self.provider_type == 'claude':
+                # Claude Provider
+                Config.LLM_API_BASE = Config.CLAUDE_API_BASE
+                Config.LLM_MODEL_NAME = self.model_name if self.model_name else Config.CLAUDE_MODEL_NAME
+                logger.info(f"使用 Claude Provider，模型: {Config.LLM_MODEL_NAME}")
+            elif self.provider_type == 'local':
+                # 本地模型 Provider
+                Config.LLM_API_BASE = Config.OLLAMA_API_BASE
+                Config.LLM_MODEL_NAME = self.model_name if self.model_name else Config.OLLAMA_MODEL_NAME
+                logger.info(f"使用本地模型 Provider，模型: {Config.LLM_MODEL_NAME}")
+            else:
+                # 阿里百炼 (默认)
+                Config.LLM_API_BASE = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+                Config.LLM_MODEL_NAME = self.model_name if self.model_name and self.model_name != '使用默认模型' else 'qwen-plus'
+                logger.info(f"使用阿里百炼 Provider，模型: {Config.LLM_MODEL_NAME}")
+            
             # 如果用户在界面临时修改了 API KEY，动态同步至全局配置
             if self.custom_api_key:
                 Config.LLM_API_KEY = self.custom_api_key
@@ -505,11 +530,26 @@ class MainWindow(QMainWindow):
         self.combo_lang.addItems(["Auto (自动检测)", "zh (中文)", "en (英文)", "ja (日语)"])
         config_box.addRow("ASR 语音语言:", self.combo_lang)
 
+        self.combo_provider = QComboBox()
+        self.combo_provider.addItems([
+            "阿里百炼 (DashScope) - 默认",
+            "OpenAI (GPT-4系列)",
+            "Claude (Claude 3系列)",
+            "本地模型 (Ollama/LM Studio)"
+        ])
+        self.combo_provider.setCurrentIndex(0)
+        config_box.addRow("AI Provider:", self.combo_provider)
+
         self.txt_api_key = QLineEdit()
         self.txt_api_key.setPlaceholderText("可在此覆盖 .env 中的 LLM API KEY")
         if Config.LLM_API_KEY != 'your-api-key':
             self.txt_api_key.setText(Config.LLM_API_KEY)
         config_box.addRow("LLM API KEY:", self.txt_api_key)
+        
+        self.combo_model = QComboBox()
+        self.combo_model.addItems(["使用默认模型", "qwen-plus", "qwen-turbo", "qwen-max", "qwen-long"])
+        self.combo_model.setEditable(True)
+        config_box.addRow("模型选择:", self.combo_model)
         
         workbench_layout.addLayout(config_box)
 
@@ -967,11 +1007,27 @@ class MainWindow(QMainWindow):
         whisper_lang = self.combo_lang.currentText().split(" ")[0].strip()
         custom_key = self.txt_api_key.text().strip()
         
+        # 根据选择的Provider索引获取Provider类型
+        provider_map = {
+            0: 'dashscope',
+            1: 'openai',
+            2: 'claude',
+            3: 'local'
+        }
+        provider_type = provider_map.get(self.combo_provider.currentIndex(), 'dashscope')
+        
+        # 获取选择的模型名称
+        model_name = self.combo_model.currentText().strip()
+        if model_name == "使用默认模型":
+            model_name = None
+        
         # 实例化后台线程，开始异步执行
         self.active_worker = AIWorker(
             file_paths=self.selected_files,
             whisper_lang=whisper_lang,
-            custom_api_key=custom_key if custom_key else None
+            custom_api_key=custom_key if custom_key else None,
+            provider_type=provider_type,
+            model_name=model_name
         )
         
         # 信号绑定
