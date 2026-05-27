@@ -273,29 +273,23 @@ class AIWorker(QThread):
     def run(self):
         temp_dir = Config.TEMP_DIR
         try:
-            # 根据选择的Provider配置不同的API
             if self.provider_type == 'openai':
-                # OpenAI Provider
                 Config.LLM_API_BASE = Config.OPENAI_API_BASE
                 Config.LLM_MODEL_NAME = self.model_name if self.model_name else Config.OPENAI_MODEL_NAME
                 logger.info(f"使用 OpenAI Provider，模型: {Config.LLM_MODEL_NAME}")
             elif self.provider_type == 'claude':
-                # Claude Provider
                 Config.LLM_API_BASE = Config.CLAUDE_API_BASE
                 Config.LLM_MODEL_NAME = self.model_name if self.model_name else Config.CLAUDE_MODEL_NAME
                 logger.info(f"使用 Claude Provider，模型: {Config.LLM_MODEL_NAME}")
             elif self.provider_type == 'local':
-                # 本地模型 Provider
                 Config.LLM_API_BASE = Config.OLLAMA_API_BASE
                 Config.LLM_MODEL_NAME = self.model_name if self.model_name else Config.OLLAMA_MODEL_NAME
                 logger.info(f"使用本地模型 Provider，模型: {Config.LLM_MODEL_NAME}")
             else:
-                # 阿里百炼 (默认)
                 Config.LLM_API_BASE = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
                 Config.LLM_MODEL_NAME = self.model_name if self.model_name and self.model_name != '使用默认模型' else 'qwen-plus'
                 logger.info(f"使用阿里百炼 Provider，模型: {Config.LLM_MODEL_NAME}")
             
-            # 如果用户在界面临时修改了 API KEY，动态同步至全局配置
             if self.custom_api_key:
                 Config.LLM_API_KEY = self.custom_api_key
                 llm_core.api_key = self.custom_api_key
@@ -1007,7 +1001,6 @@ class MainWindow(QMainWindow):
         whisper_lang = self.combo_lang.currentText().split(" ")[0].strip()
         custom_key = self.txt_api_key.text().strip()
         
-        # 根据选择的Provider索引获取Provider类型
         provider_map = {
             0: 'dashscope',
             1: 'openai',
@@ -1016,7 +1009,6 @@ class MainWindow(QMainWindow):
         }
         provider_type = provider_map.get(self.combo_provider.currentIndex(), 'dashscope')
         
-        # 获取选择的模型名称
         model_name = self.combo_model.currentText().strip()
         if model_name == "使用默认模型":
             model_name = None
